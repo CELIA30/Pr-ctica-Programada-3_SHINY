@@ -1,0 +1,106 @@
+---
+title: "PP3"
+author: "CELIA MATARRITA ORTIZ"
+date: "2023-12-16"
+output: html_document
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(shiny)
+library(shinydashboard)
+library(dplyr)
+library(plotly)
+library(DT)
+library(openxlsx)
+```
+
+```{r}
+library(readxl)
+spotify_2000_2023 <- read_excel("spotify_2000_2023.xlsx")
+View(spotify_2000_2023)
+```
+
+
+```{r}
+spotify_data <- read_xlsx("spotify_2000_2023.xlsx")
+
+
+unique_years <- sort(unique(spotify_data$year))
+unique_genres <- unique(spotify_data$`top genre`)
+
+
+ui <- dashboardPage(
+  dashboardHeader(title = "La cosa de Spotify"),
+  dashboardSidebar(
+    selectInput("year_filter", "Filtrar por Año:", choices = unique_years, selected = unique_years),
+    selectInput("genre_filter", "Filtrar por Género:", choices = unique_genres, selected = NULL),
+    downloadButton("download_btn", "Descargar Información Filtrada")
+  ),
+  dashboardBody(
+    box(
+      title = "La cosa de Canciones",
+      status = "primary",
+      solidHeader = TRUE,
+      plotlyOutput("scatter_plot")
+    ),
+    box(
+      title = "La cosa de la cosa de Canciones",
+      status = "primary",
+      solidHeader = TRUE,
+      DTOutput("filtered_table")
+    )
+  )
+)
+
+
+server <- function(input, output) {
+  output$scatter_plot <- renderPlotly({
+    filtered_data <- spotify_data %>%
+      filter(year == as.numeric(input$year_filter)) %>%
+      filter(`top genre` == input$genre_filter | is.null(input$genre_filter))
+
+    plot_ly(filtered_data, 
+            x = ~danceability, 
+            y = ~popularity, 
+            text = ~title,  
+            type = "scatter", 
+            mode = "markers") %>%
+      layout(title = paste("Interactive Scatter Plot of Danceability vs Popularity (", input$year_filter, ")"),
+             xaxis = list(title = "Danceability"),
+             yaxis = list(title = "Popularity"))
+  })
+  
+  output$filtered_table <- renderDT({
+    filtered_data <- spotify_data %>%
+      filter(year == as.numeric(input$year_filter)) %>%
+      filter(`top genre` == input$genre_filter | is.null(input$genre_filter))
+    
+    datatable(filtered_data, options = list(pageLength = 10))
+  })
+  
+  output$download_btn <- downloadHandler(
+    filename = function() {
+      paste("filtered_data_", input$year_filter, ".xlsx", sep = "")
+    },
+    content = function(file) {
+      filtered_data <- spotify_data %>%
+        filter(year == as.numeric(input$year_filter)) %>%
+        filter(`top genre` == input$genre_filter | is.null(input$genre_filter))
+      
+      if (nrow(filtered_data) > 0) {
+        write.xlsx(filtered_data, file, rowNames = FALSE)
+      } else {
+        stop("No data to download.")
+      }
+    }
+  )
+}
+
+shinyApp(ui, server)
+```
+
